@@ -38,32 +38,64 @@ __FBSDID("$FreeBSD$");
 
 #include "assym.inc"
 
+#ifdef __CHERI_PURE_CAPABILITY__
+#error TODO Port to purecap
+#endif
+
+/*
+ * Used to switch to C64 mode. The encoding of a load or store through a
+ * capability regisster in C64 mode is identical to the same operation in
+ * A64 mode but through an integer register. As such the assembly below
+ * may appear to be loaading via x0, but it will be loading via c0 if
+ * placed between two SWITCH_MODEs.
+ */
+#if __has_feature(capabilities) && !defined __CHERI_PURE_CAPABILITY__
+#define	SWITCH_MODE	bx #4
+#else
+#define	SWITCH_MODE
+#endif
+
+.macro check_user_address user_arg, limit, bad_addr_func
+	ldr	x7, =(\limit)
+#if __has_feature(capabilities)
+	gcvalue	x6, c\user_arg
+	cmp	x6, x7
+#else
+	cmp	x\user_arg, x7
+#endif
+	b.cs	\bad_addr_func
+.endm
+
 /*
  * One of the fu* or su* functions failed, return -1.
  */
 ENTRY(fsu_fault)
+	SWITCH_MODE
+EENTRY(fsu_noswitch_fault)
 	SET_FAULT_HANDLER(xzr, x1)	/* Reset the handler function */
 	EXIT_USER_ACCESS_CHECK(w0, x1)
 fsu_fault_nopcb:
 	mov	x0, #-1
 	ret
+EEND(fsu_noswitch_fault)
 END(fsu_fault)
 
 /*
- * int casueword32(volatile uint32_t *, uint32_t, uint32_t *, uint32_t)
+ * int casueword32(volatile uint32_t * __capability, uint32_t, uint32_t *,
+ *         uint32_t)
  */
 ENTRY(casueword32)
-	ldr	x4, =(VM_MAXUSER_ADDRESS-3)
-	cmp	x0, x4
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-3), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	mov	w5, #1
 	SET_FAULT_HANDLER(x6, x4)	/* And set it */
 	ENTER_USER_ACCESS(w6, x4)
+	SWITCH_MODE
 1:	ldxr	w4, [x0]		/* Load-exclusive the data */
 	cmp	w4, w1			/* Compare */
 	b.ne	2f			/* Not equal, exit */
 	stxr	w5, w3, [x0]		/* Store the new data */
+	SWITCH_MODE
 2:	EXIT_USER_ACCESS(w6)
 	SET_FAULT_HANDLER(xzr, x6)	/* Reset the fault handler */
 	str	w4, [x2]		/* Store the read data */
@@ -72,20 +104,20 @@ ENTRY(casueword32)
 END(casueword32)
 
 /*
- * int casueword(volatile u_long *, u_long, u_long *, u_long)
+ * int casueword(volatile u_long * __capability, u_long, u_long *, u_long)
  */
 ENTRY(casueword)
-	ldr	x4, =(VM_MAXUSER_ADDRESS-7)
-	cmp	x0, x4
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-7), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	mov	w5, #1
 	SET_FAULT_HANDLER(x6, x4)	/* And set it */
 	ENTER_USER_ACCESS(w6, x4)
+	SWITCH_MODE
 1:	ldxr	x4, [x0]		/* Load-exclusive the data */
 	cmp	x4, x1			/* Compare */
 	b.ne	2f			/* Not equal, exit */
 	stxr	w5, x3, [x0]		/* Store the new data */
+	SWITCH_MODE
 2:	EXIT_USER_ACCESS(w6)
 	SET_FAULT_HANDLER(xzr, x6)	/* Reset the fault handler */
 	str	x4, [x2]		/* Store the read data */
@@ -94,43 +126,43 @@ ENTRY(casueword)
 END(casueword)
 
 /*
- * int fubyte(volatile const void *)
+ * int fubyte(volatile const void * __capability)
  */
 ENTRY(fubyte)
-	ldr	x1, =VM_MAXUSER_ADDRESS
-	cmp	x0, x1
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x1)	/* And set it */
+	SWITCH_MODE
 	ldtrb	w0, [x0]		/* Try loading the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x1)	/* Reset the fault handler */
 	ret				/* Return */
 END(fubyte)
 
 /*
- * int fuword(volatile const void *)
+ * int fuword(volatile const void * __capability)
  */
 ENTRY(fuword16)
-	ldr	x1, =(VM_MAXUSER_ADDRESS-1)
-	cmp	x0, x1
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-1), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x1)	/* And set it */
+	SWITCH_MODE
 	ldtrh	w0, [x0]		/* Try loading the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x1)	/* Reset the fault handler */
 	ret				/* Return */
 END(fuword16)
 
 /*
- * int32_t fueword32(volatile const void *, int32_t *)
+ * int32_t fueword32(volatile const void *, int32_t * __capability)
  */
 ENTRY(fueword32)
-	ldr	x2, =(VM_MAXUSER_ADDRESS-3)
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-3), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	ldtr	w0, [x0]		/* Try loading the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	str	w0, [x1]		/* Save the data in kernel space */
 	mov	w0, #0			/* Success */
@@ -138,17 +170,17 @@ ENTRY(fueword32)
 END(fueword32)
 
 /*
- * long fueword(volatile const void *, int64_t *)
- * int64_t fueword64(volatile const void *, int64_t *)
+ * long fueword(volatile const void * __capability, int64_t *)
+ * int64_t fueword64(volatile const void * __capability, int64_t *)
  */
 ENTRY(fueword)
 EENTRY(fueword64)
-	ldr	x2, =(VM_MAXUSER_ADDRESS-7)
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-7), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	ldtr	x0, [x0]		/* Try loading the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	str	x0, [x1]		/* Save the data in kernel space */
 	mov	x0, #0			/* Success */
@@ -156,67 +188,104 @@ EENTRY(fueword64)
 EEND(fueword64)
 END(fueword)
 
+#if __has_feature(capabilities)
 /*
- * int subyte(volatile void *, int)
+ * int fuecap(volatile const void * __capability, intcap_t *)
+ */
+ENTRY(fuecap)
+	check_user_address 0, (VM_MAXUSER_ADDRESS-15), fsu_fault_nopcb
+	adr	x6, fsu_noswitch_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
+	ldtr	c0, [x0]		/* Try loading the data */
+	SWITCH_MODE
+	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
+	str	c0, [c1]		/* Save the data in kernel space */
+	mov	x0, #0			/* Success */
+	ret				/* Return */
+END(fuecap)
+#endif
+
+/*
+ * int subyte(volatile void * __capability, int)
+ * TODO: __capability
  */
 ENTRY(subyte)
-	ldr	x2, =VM_MAXUSER_ADDRESS
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	sttrb	w1, [x0]		/* Try storing the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	mov	x0, #0			/* Success */
 	ret				/* Return */
 END(subyte)
 
 /*
- * int suword16(volatile void *, int)
+ * int suword16(volatile void * __capability, int)
+ * TODO: __capability
  */
 ENTRY(suword16)
-	ldr	x2, =(VM_MAXUSER_ADDRESS-1)
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-1), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	sttrh	w1, [x0]		/* Try storing the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	mov	x0, #0			/* Success */
 	ret				/* Return */
 END(suword16)
 
 /*
- * int suword32(volatile void *, int)
+ * int suword32(volatile void * __capability, int)
  */
 ENTRY(suword32)
-	ldr	x2, =(VM_MAXUSER_ADDRESS-3)
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-3), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	sttr	w1, [x0]		/* Try storing the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	mov	x0, #0			/* Success */
 	ret				/* Return */
 END(suword32)
 
 /*
- * int suword(volatile void *, long)
+ * int suword(volatile void * __capability, long)
  */
 ENTRY(suword)
 EENTRY(suword64)
-	ldr	x2, =(VM_MAXUSER_ADDRESS-7)
-	cmp	x0, x2
-	b.cs	fsu_fault_nopcb
+	check_user_address 0, (VM_MAXUSER_ADDRESS-7), fsu_fault_nopcb
 	adr	x6, fsu_fault		/* Load the fault handler */
 	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
 	sttr	x1, [x0]		/* Try storing the data */
+	SWITCH_MODE
 	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
 	mov	x0, #0			/* Success */
 	ret				/* Return */
 EEND(suword64)
 END(suword)
+
+#if __has_feature(capabilities)
+/*
+ * int sucap(volatile void * __capability, intcap_t)
+ */
+ENTRY(sucap)
+	check_user_address 0, (VM_MAXUSER_ADDRESS-15), fsu_fault_nopcb
+	adr	x6, fsu_noswitch_fault	/* Load the fault handler */
+	SET_FAULT_HANDLER(x6, x2)	/* And set it */
+	SWITCH_MODE
+	sttr	c1, [x0]		/* Try storing the data */
+	SWITCH_MODE
+	SET_FAULT_HANDLER(xzr, x2)	/* Reset the fault handler */
+	mov	x0, #0			/* Success */
+	ret				/* Return */
+END(sucap)
+#endif
 
 ENTRY(setjmp)
 	/* Store the stack pointer */
