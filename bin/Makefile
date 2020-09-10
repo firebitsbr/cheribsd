@@ -34,6 +34,7 @@ SUBDIR= cat \
 	rmdir \
 	setfacl \
 	sh \
+	sh-static \
 	sleep \
 	stty \
 	sync \
