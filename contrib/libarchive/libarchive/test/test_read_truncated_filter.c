@@ -25,6 +25,7 @@
  */
 
 #include "test.h"
+#include "test_utils.h"
 __FBSDID("$FreeBSD$");
 
 /*
@@ -91,9 +92,7 @@ test_truncation(const char *compression,
 			free(buff);
 			return;
 		}
-		for (j = 0; j < (int)datasize; ++j) {
-			data[j] = (char)(rand() % 256);
-		}
+		fill_with_pseudorandom_data(123456789, data, datasize);
 		failure("%s", path);
 		if (!assertEqualIntA(a, datasize,
 		    archive_write_data(a, data, datasize))) {

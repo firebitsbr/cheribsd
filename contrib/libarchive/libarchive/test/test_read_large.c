@@ -23,6 +23,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "test.h"
+#include "test_utils.h"
 __FBSDID("$FreeBSD$");
 
 static unsigned char testdata[10 * 1024 * 1024];
@@ -45,8 +46,7 @@ DEFINE_TEST(test_read_large)
 	struct archive_entry *entry;
 	FILE *f;
 
-	for (i = 0; i < sizeof(testdata); i++)
-		testdata[i] = (unsigned char)(rand());
+	fill_with_pseudorandom_data(~0xabcdef, testdata, sizeof(testdata));
 
 	assert(NULL != (a = archive_write_new()));
 	assertA(0 == archive_write_set_format_ustar(a));

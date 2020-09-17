@@ -28,6 +28,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 
 /* Filter tests against a glob pattern. Returns non-zero if test matches
  * pattern, zero otherwise. A '^' at the beginning of the pattern negates
@@ -121,4 +122,58 @@ int get_test_set(int *test_set, int limit, const char *test,
 		}
 	}
 	return ((idx == 0)?-1:idx);
+}
+
+static inline uint64_t
+xorshift64(uint64_t *state)
+{
+	uint64_t x = *state;
+	x ^= x << 13;
+	x ^= x >> 7;
+	x ^= x << 17;
+	*state = x;
+	return (x);
+}
+
+/*
+ * Fill a buffer with reproducible pseudo-random data using a simple xorshift
+ * algorithm. Originally, most tests filled buffers with a loop that calls
+ * rand() once for each byte. However, this initialization can be extremely
+ * slow when running on emulated platforms such as QEMU where 16M calls to
+ * rand() take a long time: Before the test_write_format_7zip_large_copy test
+ * took ~22 seconds, with this change it's ~17 seconds on QEMU RISC-V.
+ */
+void
+fill_with_pseudorandom_data(uint64_t seed, void *buffer, size_t size)
+{
+	uint64_t *aligned_buffer;
+	size_t num_values;
+	size_t i;
+	size_t unaligned_suffix;
+	size_t unaligned_prefix = 0;
+	/*
+	 * To avoid unaligned stores we only fill the aligned part of the buffer
+	 * with pseudo-random data and fill the unaligned prefix with 0xab and
+	 * the suffix with 0xcd.
+	 */
+	if ((uintptr_t)buffer % sizeof(uint64_t)) {
+		unaligned_prefix =
+		    sizeof(uint64_t) - (uintptr_t)buffer % sizeof(uint64_t);
+		aligned_buffer =
+		    (uint64_t *)((char *)buffer + unaligned_prefix);
+		memset(buffer, 0xab, unaligned_prefix);
+	} else {
+		aligned_buffer = (uint64_t *)buffer;
+	}
+	assert((uintptr_t)aligned_buffer % sizeof(uint64_t) == 0);
+	num_values = (size - unaligned_prefix) / sizeof(uint64_t);
+	unaligned_suffix =
+	    size - unaligned_prefix - num_values * sizeof(uint64_t);
+	for (i = 0; i < num_values; i++) {
+		aligned_buffer[i] = xorshift64(&seed);
+	}
+	if (unaligned_suffix) {
+		memset((char *)buffer + size - unaligned_suffix, 0xcd,
+		    unaligned_suffix);
+	}
 }

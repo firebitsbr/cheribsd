@@ -23,6 +23,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 #include "test.h"
+#include "test_utils.h"
 __FBSDID("$FreeBSD$");
 
 /*
@@ -65,8 +66,11 @@ DEFINE_TEST(test_option_r)
 	if (buff == NULL)
 		goto done;
 
-	for (i = 0; i < (int)buff_size; ++i)
-		buff[i] = "abcdefghijklmnopqrstuvwxyz"[rand() % 26];
+	// FIXME: does this need to be lowercase ASCII data?
+	//for (i = 0; i < (int)buff_size; ++i)
+	//	buff[i] = "abcdefghijklmnopqrstuvwxyz"[rand() % 26];
+	fill_with_pseudorandom_data(0, buff, buff_size);
+
 	buff[buff_size - 1] = '\0';
 	assertMakeFile("f1", 0644, buff);
 	r = systemf("%s rf archive.tar --format=ustar f1 >step2.out 2>step2.err", testprog);
