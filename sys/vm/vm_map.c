@@ -5538,7 +5538,6 @@ vm_map_prot2perms(vm_prot_t prot)
 {
 	int perms = 0;
 
-	/* These should match mmap_prot2perms until they are merged */
 	if (prot & (VM_PROT_READ | VM_PROT_COPY))
 		perms |= CHERI_CAP_PERM_READ;
 	if (prot & VM_PROT_WRITE)
@@ -5698,6 +5697,8 @@ vm_map_reservation_create_fixed(vm_map_t map, vm_ptr_t *addr, vm_size_t length,
 	vm_ptr_t rounded_addr;
 	vm_offset_t hint_align;
 
+	KASSERT(alignment >= PAGE_SIZE,
+	    ("Insufficient reservation alignment %lx", alignment));
 	if ((map->flags & MAP_RESERVATIONS) == 0) {
 		*addr = vm_map_buildcap(map, *addr, length, max_prot);
 		return (KERN_SUCCESS);
