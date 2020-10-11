@@ -56,13 +56,13 @@ makeimage()
     if test -z "$partarg"; then
 	local swap ufs
 	swap="-p freebsd-swap::128K"
-	ufs="-p freebsd-ufs:=`mkcontents P 4194304`"
+	ufs="-p freebsd-ufs:=$(atf_get_srcdir)/partition_data_4M.bin"
 	partarg="$ufs $swap"
     fi
 
     imagename=$pfx-$geom-$blksz-$scheme.$format
 
-    mkimg -y -f $format -o $imagename -s $scheme -P $blksz -H $nhds -T $nsecs \
+    time mkimg -y -f $format -o $imagename -s $scheme -P $blksz -H $nhds -T $nsecs \
 	    $bootarg $partarg
     echo $imagename
     return 0
@@ -116,7 +116,7 @@ mkimg_test()
     esac
     image=`makeimage $format $scheme $blksz $geom img $partinfo`
     result=$image.out
-    hexdump -C $image > $result
+    time hexdump -C $image > $result
     if test "x$mkimg_update_baseline" = "xyes"; then
 	mkimg_rebase $image $result
     else
