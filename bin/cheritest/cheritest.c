@@ -1567,7 +1567,7 @@ static const struct cheri_test cheri_tests[] = {
 	  .ct_func = test_sandbox_var_constructor,
 	  .ct_flags = CT_FLAG_SANDBOX, },
 
-#ifdef CHERITHREAD_TESTS
+#ifdef CHERI_THREAD_TESTS
 	/*
 	 * Tests of pthread interactions with libcheri.
 	 */
@@ -1669,7 +1669,7 @@ static const struct cheri_test cheri_tests[] = {
 	  .ct_desc = "Test alignment of TLS 4K array",
 	  .ct_func = test_tls_align_4k, },
 
-#ifdef CHERITHREAD_TESTS
+#ifdef CHERI_THREAD_TESTS
 	{ .ct_name = "test_tls_threads",
 	  .ct_desc = "Test TLS across threads",
 	  .ct_func = test_tls_threads, },
